@@ -11,7 +11,7 @@
     "license": "MIT",
     "scripts": {
         "dev": "vite",
-        "build": "node scripts/compile-python.js && tsc && vite build && electron-builder",
+        "build": "node scripts/compile-python.js && tsc && npm run build:electron && vite build && electron-builder",
         "build:electron": "tsc -p tsconfig.electron.json",
         "compile:python": "node scripts/compile-python.js",
         "preview": "vite preview",
