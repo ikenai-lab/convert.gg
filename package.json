@@ -62,16 +62,15 @@
                 ]
             }
         ],
+        "compression": "maximum",
         "win": {
             "target": [
-                "nsis",
-                "portable"
+                "zip"
             ],
             "icon": "build/icon.ico"
         },
         "mac": {
             "target": [
-                "dmg",
                 "zip"
             ],
             "icon": "build/icon.icns",
@@ -79,8 +78,7 @@
         },
         "linux": {
             "target": [
-                "AppImage",
-                "deb"
+                "tar.gz"
             ],
             "icon": "build/icon.png",
             "category": "Office"
