@@ -1,6 +1,10 @@
 # convert.gg
 
-**The ultimate local media and document conversion tool.**
+<div align="center">
+  <img src="assets/logo.png" width="128" alt="convert.gg logo" />
+  <br/>
+  <b>The ultimate local media and document conversion tool.</b>
+</div>
 
 `convert.gg` is a powerful, privacy-focused desktop application designed to handle your day-to-day file manipulation needs without ever sending your data to the cloud. Whether you're merging PDFs, compressing images, or extracting archives, everything happens securely on your own machine.
 

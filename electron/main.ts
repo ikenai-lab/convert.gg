@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import path from 'path';
 import { mergePdfs, rotatePdf, splitPdf } from './pdf-ops';
 
@@ -7,9 +7,14 @@ let mainWindow: BrowserWindow | null = null;
 const isDev = !app.isPackaged;
 
 function createWindow() {
+    const iconPath = path.join(__dirname, '../build/icon.png');
+    console.log('Loading icon from:', iconPath);
+    const icon = nativeImage.createFromPath(iconPath);
+
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: icon,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
