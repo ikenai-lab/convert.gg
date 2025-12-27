@@ -1,0 +1,93 @@
+{
+    "name": "convert.gg",
+    "version": "1.0.0",
+    "description": "The ultimate file conversion tool",
+    "homepage": "https://github.com/ikenai-lab/convertor",
+    "main": "dist-electron/main.js",
+    "author": {
+        "name": "IkenAI",
+        "email": "mainuser.ikenai@gmail.com"
+    },
+    "license": "MIT",
+    "scripts": {
+        "dev": "vite",
+        "build": "node scripts/compile-python.js && tsc && vite build && electron-builder",
+        "build:electron": "tsc -p tsconfig.electron.json",
+        "compile:python": "node scripts/compile-python.js",
+        "preview": "vite preview",
+        "electron:dev": "npm run build:electron && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+        "electron:build": "npm run build:electron && vite build && electron-builder"
+    },
+    "dependencies": {
+        "@heroicons/react": "^2.2.0",
+        "clsx": "^2.1.1",
+        "pdf-lib": "^1.17.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-dropzone": "^14.3.8",
+        "react-router-dom": "^6.22.3",
+        "tailwind-merge": "^3.4.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.43",
+        "@types/react-dom": "^18.2.17",
+        "@vitejs/plugin-react": "^4.2.1",
+        "autoprefixer": "^10.4.23",
+        "concurrently": "^8.2.2",
+        "electron": "^28.1.0",
+        "electron-builder": "^24.9.1",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.17",
+        "typescript": "^5.3.3",
+        "vite": "^5.0.10",
+        "wait-on": "^7.2.0"
+    },
+    "build": {
+        "appId": "com.ikenai.convertgg",
+        "productName": "convert.gg",
+        "directories": {
+            "output": "release/${version}",
+            "buildResources": "build"
+        },
+        "files": [
+            "dist/**/*",
+            "dist-electron/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": "dist-python",
+                "to": "bin",
+                "filter": [
+                    "**/*"
+                ]
+            }
+        ],
+        "win": {
+            "target": [
+                "nsis",
+                "portable"
+            ],
+            "icon": "build/icon.ico"
+        },
+        "mac": {
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "icon": "build/icon.icns",
+            "category": "public.app-category.productivity"
+        },
+        "linux": {
+            "target": [
+                "AppImage",
+                "deb"
+            ],
+            "icon": "build/icon.png",
+            "category": "Office"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    }
+}

@@ -1,0 +1,9 @@
+paddleocr
+paddlepaddle
+pymupdf
+opencv-python
+py7zr
+rarfile
+Pillow
+docx2pdf
+pyinstaller
