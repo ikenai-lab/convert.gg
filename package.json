@@ -78,7 +78,8 @@
         },
         "linux": {
             "target": [
-                "tar.gz"
+                "AppImage",
+                "deb"
             ],
             "icon": "build/icon.png",
             "category": "Office"

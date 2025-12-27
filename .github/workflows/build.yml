@@ -51,9 +51,8 @@ jobs:
           name: artifacts-${{ matrix.os }}
           path: |
             release/**/*.zip
-            release/**/*.tar.gz
-            release/**/*.dmg
-            release/**/*.exe
+            release/**/*.AppImage
+            release/**/*.deb
           if-no-files-found: ignore
 
   create-release:
@@ -79,7 +78,8 @@ jobs:
           generate_release_notes: true
           files: |
             release-artifacts/**/*.zip
-            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.AppImage
+            release-artifacts/**/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
