@@ -42,11 +42,40 @@ jobs:
         run: npm ci
 
       - name: Build Electron App
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Remove --publish always
         run: |
-          npm run build -- --publish always
+          npm run build
 
-      # Optional: Upload artifacts to the action run itself for debugging
-      # The actual release is handled by electron-builder via 'publish always'
-      # Make sure 'repository' in package.json is correct.
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.os }}
+          path: |
+            release/**/*.zip
+            release/**/*.tar.gz
+            release/**/*.dmg
+            release/**/*.exe
+          if-no-files-found: ignore
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-artifacts/**/*.zip
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
