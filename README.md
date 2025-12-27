@@ -6,12 +6,14 @@
   <b>The ultimate local media and document conversion tool.</b>
 </div>
 
-`convert.gg` is a powerful, privacy-focused desktop application designed to handle your day-to-day file manipulation needs without ever sending your data to the cloud. Whether you're merging PDFs, compressing images, or extracting archives, everything happens securely on your own machine.
-
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Status](https://img.shields.io/badge/status-under%20development-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
+
+`convert.gg` is a powerful, privacy-focused desktop application designed to handle your day-to-day file manipulation needs without ever sending your data to the cloud. Whether you're merging PDFs, compressing images, or extracting archives, everything happens securely on your own machine.
+
+
 
 ## 🚀 Features
 
