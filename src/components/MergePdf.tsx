@@ -4,7 +4,8 @@ import {
     ArrowLeftIcon,
     DocumentIcon,
     XMarkIcon,
-    PlusIcon
+    PlusIcon,
+    FolderIcon
 } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 
@@ -12,6 +13,30 @@ export default function MergePdf() {
     const [files, setFiles] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleAddFolder = useCallback(async () => {
+        try {
+            const dirPath = await window.electronAPI.selectDirectory();
+            if (!dirPath) return;
+
+            setStatus('idle');
+            const pdfPaths = await window.electronAPI.listFiles(dirPath, ['.pdf']);
+
+            const newFiles = pdfPaths.map(p => ({
+                name: p.split(/[\\/]/).pop() || 'unknown.pdf',
+                path: p
+            } as unknown as File));
+
+            setFiles(prev => {
+                const existingPaths = new Set(prev.map(f => (f as any).path));
+                const uniqueNew = newFiles.filter(f => !existingPaths.has((f as any).path));
+                return [...prev, ...uniqueNew];
+            });
+        } catch (error) {
+            console.error('Error adding folder:', error);
+            setStatus('error');
+        }
+    }, []);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         setFiles(prev => [...prev, ...acceptedFiles]);
@@ -32,10 +57,14 @@ export default function MergePdf() {
         if (files.length < 2) return;
         setIsProcessing(true);
         try {
-            const filePaths = files.map(f => (f as any).path);
-            const outputDir = filePaths[0].substring(0, filePaths[0].lastIndexOf('/'));
-            const outputPath = `${outputDir}/merged-${Date.now()}.pdf`;
+            // Ask user for destination
+            const outputPath = await window.electronAPI.saveFile('merged.pdf', [{ name: 'PDF Document', extensions: ['pdf'] }]);
+            if (!outputPath) {
+                setIsProcessing(false);
+                return;
+            }
 
+            const filePaths = files.map(f => (f as any).path);
             await window.electronAPI.mergePdfs(filePaths, outputPath);
             setStatus('success');
             setFiles([]);
@@ -64,21 +93,32 @@ export default function MergePdf() {
                 {/* Main Content Area */}
                 <div className="space-y-6">
 
-                    {/* Dropzone - Minimalist */}
-                    <div
-                        {...getRootProps()}
-                        className={`
-              group border border-dashed rounded-lg p-8 transition-all duration-200 cursor-pointer text-center
-              ${isProcessing ? 'bg-gray-50 border-gray-200 opacity-50' :
-                                isDragActive ? 'bg-blue-50 border-blue-400' :
-                                    'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
-            `}
-                    >
-                        <input {...getInputProps()} />
-                        <div className="flex flex-col items-center justify-center space-y-2 text-gray-500 group-hover:text-gray-800">
-                            <PlusIcon className="w-6 h-6" />
-                            <span className="text-sm font-medium">Click to add files or drag and drop</span>
+                    {/* Dropzone & Folder Button */}
+                    <div className="flex gap-4">
+                        <div
+                            {...getRootProps()}
+                            className={`
+                                flex-1 group border border-dashed rounded-lg p-8 transition-all duration-200 cursor-pointer text-center
+                                ${isProcessing ? 'bg-gray-50 border-gray-200 opacity-50' :
+                                    isDragActive ? 'bg-blue-50 border-blue-400' :
+                                        'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
+                            `}
+                        >
+                            <input {...getInputProps()} />
+                            <div className="flex flex-col items-center justify-center space-y-2 text-gray-500 group-hover:text-gray-800">
+                                <PlusIcon className="w-6 h-6" />
+                                <span className="text-sm font-medium">Click to add files or drag and drop</span>
+                            </div>
                         </div>
+
+                        <button
+                            onClick={handleAddFolder}
+                            disabled={isProcessing}
+                            className="flex flex-col items-center justify-center border border-gray-300 rounded-lg p-4 px-8 text-gray-500 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-all gap-2"
+                        >
+                            <FolderIcon className="w-6 h-6" />
+                            <span className="text-sm font-medium">Add Folder</span>
+                        </button>
                     </div>
 
                     {/* File List - Notion Database Style */}
@@ -111,22 +151,20 @@ export default function MergePdf() {
                     {/* Actions & Status */}
                     <div className="pt-4 flex items-center justify-between">
                         <div className="text-sm min-h-[20px]">
-                            {status === 'success' && <span className="text-gray-600 flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>Merged successfully</span>}
-                            {status === 'error' && <span className="text-red-600 flex items-center">Error merging files</span>}
+                            {status === 'success' && <span className="text-green-600 font-medium">✨ PDFs merged successfully!</span>}
+                            {status === 'error' && <span className="text-red-600 font-medium">❌ Error merging files.</span>}
                         </div>
 
-                        {(files.length >= 2) && (
-                            <button
-                                onClick={handleMerge}
-                                disabled={isProcessing}
-                                className={`
-                  px-4 py-2 rounded text-sm font-medium text-white transition-all
-                  ${isProcessing ? 'bg-gray-400' : 'bg-black hover:bg-gray-800'}
-                `}
-                            >
-                                {isProcessing ? 'Processing' : 'Merge Files'}
-                            </button>
-                        )}
+                        <button
+                            onClick={handleMerge}
+                            disabled={files.length < 2 || isProcessing}
+                            className={`
+                                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
+                                ${files.length < 2 || isProcessing ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
+                            `}
+                        >
+                            {isProcessing ? 'Merging...' : (files.length > 1 ? `Merge ${files.length} Files` : 'Merge Files')}
+                        </button>
                     </div>
 
                 </div>

@@ -92,11 +92,15 @@ export default function SplitPdf() {
                 return;
             }
 
-            const filePath = (file as any).path;
-            const outputDir = filePath.substring(0, filePath.lastIndexOf('/'));
-            // Creating a unique name for the extracted file
-            const outputPath = `${outputDir}/extracted-${Date.now()}.pdf`;
+            const defaultName = file.name.replace('.pdf', '_extracted.pdf');
+            const outputPath = await window.electronAPI.saveFile(defaultName, [{ name: 'PDF Document', extensions: ['pdf'] }]);
 
+            if (!outputPath) {
+                setIsProcessing(false);
+                return;
+            }
+
+            const filePath = (file as any).path;
             await window.electronAPI.extractPages(filePath, pageIndices, outputPath);
             setStatus('success');
         } catch (error) {

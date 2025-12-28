@@ -1,60 +1,122 @@
-
-import { useCallback, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ArrowLeftIcon, DocumentTextIcon, CheckBadgeIcon } from '@heroicons/react/24/outline';
-import { useNavigate } from 'react-router-dom';
+import {
+    ArrowLeftIcon,
+    XMarkIcon,
+    CheckBadgeIcon,
+    FolderIcon,
+    PlusIcon,
+    DocumentIcon
+} from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
+
+const joinPath = (dir: string, file: string) => {
+    const sep = dir.includes('\\') ? '\\' : '/';
+    return `${dir.replace(/[\\/]$/, '')}${sep}${file}`;
+};
 
 export default function ConvertDocument() {
-    const navigate = useNavigate();
-    const [file, setFile] = useState<File | null>(null);
-    const [status, setStatus] = useState<string>('');
+    const [files, setFiles] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [status, setStatus] = useState<string>('idle');
+
+    const handleAddFolder = useCallback(async () => {
+        try {
+            const dirPath = await window.electronAPI.selectDirectory();
+            if (!dirPath) return;
+
+            setStatus('Reading folder...');
+            // Check for doc, docx, odt, rtf
+            const extensions = ['.doc', '.docx', '.odt', '.rtf'];
+            const docPaths = await window.electronAPI.listFiles(dirPath, extensions);
+
+            const newFiles = docPaths.map(p => ({
+                name: p.split(/[\\/]/).pop() || 'unknown.doc',
+                path: p
+            } as unknown as File));
+
+            setFiles(prev => {
+                const existingPaths = new Set(prev.map(f => (f as any).path));
+                const uniqueNew = newFiles.filter(f => !existingPaths.has((f as any).path));
+                return [...prev, ...uniqueNew];
+            });
+            setStatus('idle');
+        } catch (error) {
+            console.error('Error adding folder:', error);
+            setStatus('Error reading folder.');
+        }
+    }, []);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles.length > 0) {
-            setFile(acceptedFiles[0]);
-            setStatus('');
-        }
+        setFiles(prev => [...prev, ...acceptedFiles]);
+        setStatus('idle');
     }, []);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
-        multiple: false,
         accept: {
             'application/msword': ['.doc'],
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
             'application/vnd.oasis.opendocument.text': ['.odt'],
             'application/rtf': ['.rtf'],
             'text/rtf': ['.rtf']
-        }
+        },
+        disabled: isProcessing
     });
 
+    const removeFile = (index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleConvert = async () => {
-        if (!file) return;
+        if (files.length === 0) return;
+        setIsProcessing(true);
+        setStatus('Converting...');
 
         try {
-            setIsProcessing(true);
-            setStatus('Choosing destination...');
+            let outputTarget: string | null = null;
+            const isBatch = files.length > 1;
 
-            const defaultName = file.name.replace(/\.[^/.]+$/, "") + ".pdf";
-            const filterObj = { name: 'PDF Document', extensions: ['pdf'] };
-
-            // 1. Ask user for save location
-            const savePath = await window.electronAPI.saveFile(defaultName, [filterObj]);
-
-            if (!savePath) {
-                setStatus('Conversion cancelled');
-                setIsProcessing(false);
-                return;
+            if (isBatch) {
+                // Batch: Select Output Directory
+                outputTarget = await window.electronAPI.selectDirectory();
+                if (!outputTarget) {
+                    setIsProcessing(false);
+                    setStatus('idle');
+                    return;
+                }
+            } else {
+                // Single: Save File Dialog
+                const f = files[0];
+                const defaultName = f.name.replace(/\.[^/.]+$/, "") + ".pdf";
+                outputTarget = await window.electronAPI.saveFile(defaultName, [{ name: 'PDF Document', extensions: ['pdf'] }]);
+                if (!outputTarget) {
+                    setIsProcessing(false);
+                    setStatus('idle');
+                    return;
+                }
             }
 
-            setStatus(`Converting ${file.name} to PDF...`);
+            // Process Files
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const filePath = (f as any).path;
+                let outputPath = '';
 
-            // 2. Call backend
-            // @ts-ignore
-            await window.electronAPI.convertToPdf(file.path, savePath);
+                if (isBatch) {
+                    // OutputDir / filename.pdf
+                    const name = f.name.replace(/\.[^/.]+$/, "") + ".pdf";
+                    outputPath = joinPath(outputTarget!, name);
+                } else {
+                    outputPath = outputTarget!;
+                }
 
-            setStatus('Success! Document converted.');
+                setStatus(`Converting ${i + 1}/${files.length}: ${f.name}...`);
+                await window.electronAPI.convertToPdf(filePath, outputPath);
+            }
+
+            setStatus('success');
+            setFiles([]);
         } catch (error) {
             console.error(error);
             setStatus('Error: Helper failed. Install MS Word or LibreOffice.');
@@ -64,42 +126,89 @@ export default function ConvertDocument() {
     };
 
     return (
-        <div className="min-h-screen p-8 bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors">
-            <button onClick={() => navigate('/')} className="mb-8 flex items-center text-gray-500 hover:text-[var(--text-primary)]">
-                <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back
-            </button>
-
-            <div className="max-w-2xl mx-auto">
-                <h1 className="text-3xl font-semibold mb-2">Convert to PDF</h1>
-                <p className="text-gray-500 mb-8">Convert DOC, DOCX, ODT, or RTF into a PDF.</p>
-
-                <div
-                    {...getRootProps()}
-                    className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer transition-colors mb-8
-            ${isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-[var(--card-border)] hover:scale-105 active:scale-95'}`}
-                >
-                    <input {...getInputProps()} />
-                    <DocumentTextIcon className="h-12 w-12 text-gray-400 mb-4" />
-                    {file ? (
-                        <div className="flex items-center gap-2">
-                            <CheckBadgeIcon className="h-6 w-6 text-green-500" />
-                            <p className="text-lg font-medium">{file.name}</p>
-                        </div>
-                    ) : (
-                        <p className="text-gray-500">Drag & drop document here</p>
-                    )}
+        <div className="min-h-screen bg-white text-gray-900 font-sans p-12">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-10">
+                    <Link to="/" className="inline-flex items-center text-gray-400 hover:text-gray-900 transition-colors text-sm mb-6">
+                        <ArrowLeftIcon className="w-4 h-4 mr-1.5" />
+                        Dashboard
+                    </Link>
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Convert to PDF</h1>
+                    <p className="text-gray-500">Convert DOC, DOCX, ODT, or RTF into a PDF.</p>
                 </div>
 
-                <div className="flex flex-col items-center gap-4">
-                    <button
-                        onClick={handleConvert}
-                        disabled={!file || isProcessing}
-                        className="px-8 py-3 bg-[var(--text-primary)] text-[var(--bg-primary)] rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                    >
-                        {isProcessing ? 'Converting...' : 'Convert to PDF'}
-                    </button>
+                <div className="space-y-6">
+                    <div className="flex gap-4">
+                        <div
+                            {...getRootProps()}
+                            className={`
+                                flex-1 group border border-dashed rounded-lg p-8 transition-all duration-200 cursor-pointer text-center
+                                ${isProcessing ? 'bg-blue-50 border-blue-200 opacity-50' :
+                                    isDragActive ? 'bg-blue-50 border-blue-400' :
+                                        'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
+                            `}
+                        >
+                            <input {...getInputProps()} />
+                            <div className="flex flex-col items-center justify-center space-y-2 text-gray-500 group-hover:text-gray-800">
+                                <PlusIcon className="w-6 h-6" />
+                                <span className="text-sm font-medium">Click to add Documents</span>
+                            </div>
+                        </div>
 
-                    {status && <p className={`text-sm font-medium animate-pulse ${status.includes('Error') ? 'text-red-500' : ''}`}>{status}</p>}
+                        <button
+                            onClick={handleAddFolder}
+                            disabled={isProcessing}
+                            className="flex flex-col items-center justify-center border border-gray-300 rounded-lg p-4 px-8 text-gray-500 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-all gap-2"
+                        >
+                            <FolderIcon className="w-6 h-6" />
+                            <span className="text-sm font-medium">Add Folder</span>
+                        </button>
+                    </div>
+
+                    {files.length > 0 && (
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">File Name</span>
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</span>
+                            </div>
+                            <ul className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                                {files.map((file, idx) => (
+                                    <li key={idx} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 group">
+                                        <div className="flex items-center space-x-3 overflow-hidden">
+                                            <DocumentIcon className="w-4 h-4 text-gray-400" />
+                                            <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                                            disabled={isProcessing}
+                                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                        >
+                                            <XMarkIcon className="w-4 h-4" />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    <div className="pt-4 flex items-center justify-between">
+                        <div className="text-sm min-h-[20px]">
+                            {status === 'success' && <span className="text-green-600 font-medium flex items-center"><CheckBadgeIcon className="w-4 h-4 mr-1" /> Converted successfully!</span>}
+                            {status.includes('Error') && <span className="text-red-600 font-medium">{status}</span>}
+                            {status !== 'idle' && status !== 'success' && !status.includes('Error') && <span className="text-gray-500 animate-pulse">{status}</span>}
+                        </div>
+
+                        <button
+                            onClick={handleConvert}
+                            disabled={files.length === 0 || isProcessing}
+                            className={`
+                                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
+                                ${files.length === 0 || isProcessing ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
+                            `}
+                        >
+                            {isProcessing ? 'Converting...' : (files.length > 1 ? `Convert ${files.length} Files` : 'Convert to PDF')}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

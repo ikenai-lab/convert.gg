@@ -45,4 +45,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
     saveFile: (defaultName: string, filters?: Electron.FileFilter[]) => ipcRenderer.invoke('dialog:saveFile', defaultName, filters),
     openFile: (filters?: Electron.FileFilter[], allowMulti?: boolean) => ipcRenderer.invoke('dialog:openFile', filters, allowMulti),
+    listFiles: (dirPath: string, extensions?: string[]) => ipcRenderer.invoke('system:listFiles', dirPath, extensions),
 });

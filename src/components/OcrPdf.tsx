@@ -2,50 +2,111 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
     ArrowLeftIcon,
-    DocumentTextIcon,
     XMarkIcon,
-    SparklesIcon
+    SparklesIcon,
+    FolderIcon,
+    PlusIcon,
+    DocumentIcon
 } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 
+const joinPath = (dir: string, file: string) => {
+    const sep = dir.includes('\\') ? '\\' : '/';
+    return `${dir.replace(/[\\/]$/, '')}${sep}${file}`;
+};
+
 export default function OcrPdf() {
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string>('idle');
 
-    const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles.length > 0) {
-            setFile(acceptedFiles[0]);
+    const handleAddFolder = useCallback(async () => {
+        try {
+            const dirPath = await window.electronAPI.selectDirectory();
+            if (!dirPath) return;
+
             setStatus('idle');
+            const pdfPaths = await window.electronAPI.listFiles(dirPath, ['.pdf']);
+
+            const newFiles = pdfPaths.map(p => ({
+                name: p.split(/[\\/]/).pop() || 'unknown.pdf',
+                path: p
+            } as unknown as File));
+
+            setFiles(prev => {
+                const existingPaths = new Set(prev.map(f => (f as any).path));
+                const uniqueNew = newFiles.filter(f => !existingPaths.has((f as any).path));
+                return [...prev, ...uniqueNew];
+            });
+        } catch (error) {
+            console.error('Error adding folder:', error);
+            setStatus('Error reading folder.');
         }
+    }, []);
+
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        setFiles(prev => [...prev, ...acceptedFiles]);
+        setStatus('idle');
     }, []);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         accept: { 'application/pdf': ['.pdf'] },
-        maxFiles: 1,
         disabled: isProcessing
     });
 
-    const removeFile = () => {
-        setFile(null);
-        setStatus('idle');
+    const removeFile = (index: number) => {
+        setFiles(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleConvert = async () => {
-        if (!file) return;
+        if (files.length === 0) return;
         setIsProcessing(true);
+        setStatus('Converting...');
+
         try {
-            const filePath = (file as any).path;
-            const outputDir = filePath.substring(0, filePath.lastIndexOf('/'));
-            const outputPath = `${outputDir}/${file.name.replace('.pdf', '')}_ocr.docx`;
+            let outputTarget: string | null = null;
+            const isBatch = files.length > 1;
 
-            setStatus(`Converting to Word...`);
+            if (isBatch) {
+                // Batch: Select Output Directory
+                outputTarget = await window.electronAPI.selectDirectory();
+                if (!outputTarget) {
+                    setIsProcessing(false);
+                    setStatus('idle');
+                    return;
+                }
+            } else {
+                // Single: Save File Dialog (DOCX)
+                const f = files[0];
+                const defaultName = f.name.replace('.pdf', '_ocr.docx');
+                outputTarget = await window.electronAPI.saveFile(defaultName, [{ name: 'Word Document', extensions: ['docx'] }]);
+                if (!outputTarget) {
+                    setIsProcessing(false);
+                    setStatus('idle');
+                    return;
+                }
+            }
 
-            // 2. Call backend
-            await window.electronAPI.ocrPdf(filePath, outputPath);
+            // Process Files
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const filePath = (f as any).path;
+                let outputPath = '';
 
-            setStatus('Success! Document ready.');
+                if (isBatch) {
+                    const name = f.name.replace('.pdf', '_ocr.docx');
+                    outputPath = joinPath(outputTarget!, name);
+                } else {
+                    outputPath = outputTarget!;
+                }
+
+                setStatus(`Converting ${i + 1}/${files.length}: ${f.name}...`);
+                await window.electronAPI.ocrPdf(filePath, outputPath);
+            }
+
+            setStatus('success');
+            setFiles([]);
         } catch (error) {
             console.error(error);
             setStatus('error');
@@ -67,50 +128,75 @@ export default function OcrPdf() {
                 </div>
 
                 <div className="space-y-6">
-                    {!file ? (
+                    <div className="flex gap-4">
                         <div
                             {...getRootProps()}
                             className={`
-                group border border-dashed rounded-lg p-16 transition-all duration-200 cursor-pointer text-center
-                ${isDragActive ? 'bg-green-50 border-green-400' : 'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
-              `}
+                                flex-1 group border border-dashed rounded-lg p-8 transition-all duration-200 cursor-pointer text-center
+                                ${isProcessing ? 'bg-green-50 border-green-200 opacity-50' :
+                                    isDragActive ? 'bg-green-50 border-green-400' :
+                                        'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
+                            `}
                         >
                             <input {...getInputProps()} />
-                            <div className="flex flex-col items-center justify-center space-y-3 text-gray-500 group-hover:text-gray-800">
-                                <DocumentTextIcon className="w-8 h-8 stroke-1" />
-                                <span className="text-sm font-medium">Click to upload PDF for OCR</span>
+                            <div className="flex flex-col items-center justify-center space-y-2 text-gray-500 group-hover:text-gray-800">
+                                <PlusIcon className="w-6 h-6" />
+                                <span className="text-sm font-medium">Click to add PDFs</span>
                             </div>
                         </div>
-                    ) : (
-                        <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/50 flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-white border border-gray-200 rounded flex items-center justify-center">
-                                    <DocumentTextIcon className="w-5 h-5 text-green-600" />
-                                </div>
-                                <p className="font-medium text-gray-900 text-sm">{file.name}</p>
+
+                        <button
+                            onClick={handleAddFolder}
+                            disabled={isProcessing}
+                            className="flex flex-col items-center justify-center border border-gray-300 rounded-lg p-4 px-8 text-gray-500 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-400 transition-all gap-2"
+                        >
+                            <FolderIcon className="w-6 h-6" />
+                            <span className="text-sm font-medium">Add Folder</span>
+                        </button>
+                    </div>
+
+                    {files.length > 0 && (
+                        <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">File Name</span>
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</span>
                             </div>
-                            <button onClick={removeFile} className="text-gray-400 hover:text-red-500">
-                                <XMarkIcon className="w-5 h-5" />
-                            </button>
+                            <ul className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                                {files.map((file, idx) => (
+                                    <li key={idx} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 group">
+                                        <div className="flex items-center space-x-3 overflow-hidden">
+                                            <DocumentIcon className="w-4 h-4 text-gray-400" />
+                                            <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                                            disabled={isProcessing}
+                                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                        >
+                                            <XMarkIcon className="w-4 h-4" />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     )}
 
                     <div className="pt-4 flex items-center justify-between">
                         <div className="text-sm min-h-[20px]">
-                            {status === 'success' && <span className="text-green-600 font-medium flex items-center"><SparklesIcon className="w-4 h-4 mr-1" /> Saved as DOCX!</span>}
-                            {status === 'error' && <span className="text-red-600 font-medium">❌ Error converting file.</span>}
-                            {isProcessing && <span className="text-gray-500 animate-pulse">Running OCR analysis... this may take a moment.</span>}
+                            {status === 'success' && <span className="text-green-600 font-medium flex items-center"><SparklesIcon className="w-4 h-4 mr-1" /> Converted successfully!</span>}
+                            {status === 'error' && <span className="text-red-600 font-medium">❌ Error converting.</span>}
+                            {status !== 'idle' && status !== 'success' && status !== 'error' && <span className="text-gray-500 animate-pulse">{status}</span>}
                         </div>
 
                         <button
                             onClick={handleConvert}
-                            disabled={!file || isProcessing}
+                            disabled={files.length === 0 || isProcessing}
                             className={`
-                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
-                ${!file || isProcessing ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
-              `}
+                                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
+                                ${files.length === 0 || isProcessing ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
+                            `}
                         >
-                            Convert to Word
+                            {isProcessing ? 'Converting...' : (files.length > 1 ? `Convert ${files.length} Files` : 'Convert to Word')}
                         </button>
                     </div>
                 </div>

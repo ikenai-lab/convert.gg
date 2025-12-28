@@ -1,148 +1,175 @@
-
-import { useCallback, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ArrowLeftIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline';
-import { useNavigate } from 'react-router-dom';
+import {
+    ArrowLeftIcon,
+    ArrowsPointingInIcon,
+    DocumentIcon,
+    XMarkIcon
+} from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 
 const FORMATS = [
     { id: 'jpg', label: 'JPG' },
     { id: 'jpeg', label: 'JPEG' },
     { id: 'webp', label: 'WebP' },
-    { id: 'png', label: 'PNG (Optimize)' }, // PNG isn't good for target size but we can optimize
+    { id: 'png', label: 'PNG (Optimize)' },
 ];
 
 export default function CompressImage() {
-    const navigate = useNavigate();
     const [file, setFile] = useState<File | null>(null);
     const [outputFormat, setOutputFormat] = useState('jpg');
     const [targetSizeKB, setTargetSizeKB] = useState<number>(500);
-    const [status, setStatus] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [status, setStatus] = useState<string>('idle');
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (acceptedFiles.length > 0) {
             setFile(acceptedFiles[0]);
-            setStatus('');
+            setStatus('idle');
         }
     }, []);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         multiple: false,
-        accept: {
-            'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff']
-        }
+        accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff'] },
+        disabled: isProcessing
     });
+
+    const removeFile = () => {
+        setFile(null);
+        setStatus('idle');
+    };
 
     const handleCompress = async () => {
         if (!file) return;
+        setIsProcessing(true);
+        setStatus('Choosing destination...');
 
         try {
-            setIsProcessing(true);
-            setStatus('Choosing destination...');
-
             const defaultName = `compressed.${outputFormat}`;
-            const filterObj = {
-                name: `${outputFormat.toUpperCase()} Image`,
-                extensions: [outputFormat]
-            };
-
-            // 1. Ask user for save location
-            const savePath = await window.electronAPI.saveFile(defaultName, [filterObj]);
+            const savePath = await window.electronAPI.saveFile(defaultName, [
+                { name: `${outputFormat.toUpperCase()} Image`, extensions: [outputFormat] }
+            ]);
 
             if (!savePath) {
-                setStatus('Calculated cancelled');
                 setIsProcessing(false);
+                setStatus('idle');
                 return;
             }
 
             setStatus(`Compressing to < ${targetSizeKB}KB...`);
-
             const targetSizeBytes = targetSizeKB * 1024;
-
-            // 2. Call backend
             // @ts-ignore
             await window.electronAPI.compressImage(file.path, savePath, targetSizeBytes);
 
-            setStatus('Success! Image compressed.');
+            setStatus('success');
+            setFile(null);
         } catch (error) {
             console.error(error);
-            setStatus('Error: Failed to compress image.');
+            setStatus('error');
         } finally {
             setIsProcessing(false);
         }
     };
 
     return (
-        <div className="min-h-screen p-8 bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors">
-            <button onClick={() => navigate('/')} className="mb-8 flex items-center text-gray-500 hover:text-[var(--text-primary)]">
-                <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back
-            </button>
-
-            <div className="max-w-2xl mx-auto">
-                <h1 className="text-3xl font-semibold mb-2">Compress Image</h1>
-                <p className="text-gray-500 mb-8">Reduce image size to a specific target.</p>
-
-                <div
-                    {...getRootProps()}
-                    className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer transition-colors mb-8
-            ${isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-[var(--card-border)] hover:bg-gray-100 dark:hover:bg-[#2a2a2a]'}`}
-                >
-                    <input {...getInputProps()} />
-                    <ArrowsPointingInIcon className="h-12 w-12 text-gray-400 mb-4" />
-                    {file ? (
-                        <p className="text-lg font-medium">{file.name}</p>
-                    ) : (
-                        <p className="text-gray-500">Drag & drop image here</p>
-                    )}
+        <div className="min-h-screen bg-white text-gray-900 font-sans p-12">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-10">
+                    <Link to="/" className="inline-flex items-center text-gray-400 hover:text-gray-900 transition-colors text-sm mb-6">
+                        <ArrowLeftIcon className="w-4 h-4 mr-1.5" />
+                        Dashboard
+                    </Link>
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Compress Image</h1>
+                    <p className="text-gray-500">Reduce image size to a specific target.</p>
                 </div>
 
-                {file && (
-                    <div className="space-y-6 mb-8">
-                        {/* Target Size Input */}
-                        <div>
-                            <label className="block text-sm font-medium mb-2">Target Size (KB)</label>
-                            <input
-                                type="number"
-                                value={targetSizeKB}
-                                onChange={(e) => setTargetSizeKB(parseInt(e.target.value) || 0)}
-                                className="w-full p-2 rounded-lg border bg-[var(--card-bg)] border-[var(--card-border)] focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">We'll adjust quality to try fit this size.</p>
-                        </div>
-
-                        {/* Output Format */}
-                        <div>
-                            <label className="block text-sm font-medium mb-3">Output Format</label>
-                            <div className="flex gap-3 flex-wrap">
-                                {FORMATS.map(fmt => (
-                                    <button
-                                        key={fmt.id}
-                                        onClick={() => setOutputFormat(fmt.id)}
-                                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors
-                                    ${outputFormat === fmt.id
-                                                ? 'bg-black text-white dark:bg-white dark:text-black border-transparent'
-                                                : 'bg-[var(--card-bg)] border-[var(--card-border)] hover:bg-gray-50 dark:hover:bg-[#2a2a2a]'
-                                            }`}
-                                    >
-                                        {fmt.label}
-                                    </button>
-                                ))}
+                <div className="space-y-6">
+                    {!file ? (
+                        <div
+                            {...getRootProps()}
+                            className={`
+                                group border border-dashed rounded-lg p-16 transition-all duration-200 cursor-pointer text-center
+                                ${isDragActive ? 'bg-blue-50 border-blue-400' : 'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
+                            `}
+                        >
+                            <input {...getInputProps()} />
+                            <div className="flex flex-col items-center justify-center space-y-3 text-gray-500 group-hover:text-gray-800">
+                                <ArrowsPointingInIcon className="w-8 h-8 stroke-1" />
+                                <span className="text-sm font-medium">Drop image here or click to select</span>
                             </div>
                         </div>
+                    ) : (
+                        <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/50 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-white border border-gray-200 rounded flex items-center justify-center">
+                                    <DocumentIcon className="w-5 h-5 text-gray-600" />
+                                </div>
+                                <p className="font-medium text-gray-900 text-sm">{file.name}</p>
+                            </div>
+                            <button onClick={removeFile} className="text-gray-400 hover:text-red-500">
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+
+                    {file && (
+                        <div className="space-y-6">
+                            <div className="bg-white border border-gray-200 rounded-lg p-5">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                                    Target Size (KB)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={targetSizeKB}
+                                    onChange={(e) => setTargetSizeKB(parseInt(e.target.value) || 0)}
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                                />
+                                <p className="text-xs text-gray-400 mt-2">We'll adjust quality to fit this size.</p>
+                            </div>
+
+                            <div className="bg-white border border-gray-200 rounded-lg p-5">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+                                    Output Format
+                                </label>
+                                <div className="flex gap-3 flex-wrap">
+                                    {FORMATS.map(fmt => (
+                                        <button
+                                            key={fmt.id}
+                                            onClick={() => setOutputFormat(fmt.id)}
+                                            className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors
+                                                ${outputFormat === fmt.id
+                                                    ? 'bg-black text-white border-transparent'
+                                                    : 'bg-white border-gray-300 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {fmt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="pt-4 flex items-center justify-between">
+                        <div className="text-sm min-h-[20px]">
+                            {status === 'success' && <span className="text-green-600 font-medium">✨ Image compressed successfully!</span>}
+                            {status === 'error' && <span className="text-red-600 font-medium">❌ Error compressing image.</span>}
+                            {status !== 'idle' && status !== 'success' && status !== 'error' && <span className="text-gray-500">{status}</span>}
+                        </div>
+
+                        <button
+                            onClick={handleCompress}
+                            disabled={!file || isProcessing || targetSizeKB <= 0}
+                            className={`
+                                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
+                                ${!file || isProcessing || targetSizeKB <= 0 ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
+                            `}
+                        >
+                            {isProcessing ? 'Compressing...' : 'Compress Image'}
+                        </button>
                     </div>
-                )}
-
-                <div className="flex flex-col items-center gap-4">
-                    <button
-                        onClick={handleCompress}
-                        disabled={!file || isProcessing || targetSizeKB <= 0}
-                        className="px-8 py-3 bg-[var(--text-primary)] text-[var(--bg-primary)] rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                    >
-                        {isProcessing ? 'Compressing...' : 'Compress Image'}
-                    </button>
-
-                    {status && <p className="text-sm font-medium animate-pulse">{status}</p>}
                 </div>
             </div>
         </div>

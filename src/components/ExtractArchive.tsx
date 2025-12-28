@@ -1,19 +1,22 @@
-
-import { useCallback, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ArrowLeftIcon, FolderOpenIcon } from '@heroicons/react/24/outline';
-import { useNavigate } from 'react-router-dom';
+import {
+    ArrowLeftIcon,
+    FolderOpenIcon,
+    DocumentIcon,
+    XMarkIcon
+} from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
 
 export default function ExtractArchive() {
-    const navigate = useNavigate();
     const [file, setFile] = useState<File | null>(null);
-    const [status, setStatus] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [status, setStatus] = useState<string>('idle');
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (acceptedFiles.length > 0) {
             setFile(acceptedFiles[0]);
-            setStatus('');
+            setStatus('idle');
         }
     }, []);
 
@@ -26,76 +29,102 @@ export default function ExtractArchive() {
             'application/gzip': ['.gz', '.tgz', '.tar.gz'],
             'application/x-7z-compressed': ['.7z'],
             'application/vnd.rar': ['.rar']
-        }
+        },
+        disabled: isProcessing
     });
+
+    const removeFile = () => {
+        setFile(null);
+        setStatus('idle');
+    };
 
     const handleExtract = async () => {
         if (!file) return;
+        setIsProcessing(true);
+        setStatus('Choosing destination...');
 
         try {
-            setIsProcessing(true);
-            setStatus('Choosing destination...');
-
-            // 1. Ask user for destination folder
             const outputDir = await window.electronAPI.selectDirectory();
 
             if (!outputDir) {
-                setStatus('Extraction cancelled');
                 setIsProcessing(false);
+                setStatus('idle');
                 return;
             }
 
-            setStatus(`Extracting to ${outputDir}...`);
-
-            // 2. Call backend
-            // We need the full path of the input file. 
-            // In Electron renderer, File object has 'path' property exposing absolute path.
+            setStatus(`Extracting to folder...`);
             // @ts-ignore
             await window.electronAPI.extractArchive(file.path, outputDir);
 
-            setStatus('Success! Archive extracted.');
+            setStatus('success');
+            setFile(null);
         } catch (error) {
             console.error(error);
-            setStatus('Error: Failed to extract archive.');
+            setStatus('error');
         } finally {
             setIsProcessing(false);
         }
     };
 
     return (
-        <div className="min-h-screen p-8 bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors">
-            <button onClick={() => navigate('/')} className="mb-8 flex items-center text-gray-500 hover:text-[var(--text-primary)]">
-                <ArrowLeftIcon className="h-4 w-4 mr-2" /> Back
-            </button>
-
-            <div className="max-w-2xl mx-auto">
-                <h1 className="text-3xl font-semibold mb-2">Extract Archive</h1>
-                <p className="text-gray-500 mb-8">Unzip .zip, .tar, .7z, .rar and more.</p>
-
-                <div
-                    {...getRootProps()}
-                    className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer transition-colors mb-8
-            ${isDragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-[var(--card-border)] hover:bg-gray-50 dark:hover:bg-[#2a2a2a]'}`}
-                >
-                    <input {...getInputProps()} />
-                    <FolderOpenIcon className="h-12 w-12 text-gray-400 mb-4" />
-                    {file ? (
-                        <p className="text-lg font-medium">{file.name}</p>
-                    ) : (
-                        <p className="text-gray-500">Drag & drop archive here, or click to select</p>
-                    )}
+        <div className="min-h-screen bg-white text-gray-900 font-sans p-12">
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-10">
+                    <Link to="/" className="inline-flex items-center text-gray-400 hover:text-gray-900 transition-colors text-sm mb-6">
+                        <ArrowLeftIcon className="w-4 h-4 mr-1.5" />
+                        Dashboard
+                    </Link>
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Extract Archive</h1>
+                    <p className="text-gray-500">Unzip .zip, .tar, .7z, .rar and more.</p>
                 </div>
 
-                <div className="flex flex-col items-center gap-4">
-                    <button
-                        onClick={handleExtract}
-                        disabled={!file || isProcessing}
-                        className="px-8 py-3 bg-[var(--text-primary)] text-[var(--bg-primary)] rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                    >
-                        {isProcessing ? 'Extracting...' : 'Extract Files'}
-                    </button>
+                <div className="space-y-6">
+                    {!file ? (
+                        <div
+                            {...getRootProps()}
+                            className={`
+                                group border border-dashed rounded-lg p-16 transition-all duration-200 cursor-pointer text-center
+                                ${isDragActive ? 'bg-blue-50 border-blue-400' : 'border-gray-300 hover:bg-gray-50 hover:border-gray-400'}
+                            `}
+                        >
+                            <input {...getInputProps()} />
+                            <div className="flex flex-col items-center justify-center space-y-3 text-gray-500 group-hover:text-gray-800">
+                                <FolderOpenIcon className="w-8 h-8 stroke-1" />
+                                <span className="text-sm font-medium">Drop archive here or click to select</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/50 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-white border border-gray-200 rounded flex items-center justify-center">
+                                    <DocumentIcon className="w-5 h-5 text-gray-600" />
+                                </div>
+                                <p className="font-medium text-gray-900 text-sm">{file.name}</p>
+                            </div>
+                            <button onClick={removeFile} className="text-gray-400 hover:text-red-500">
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
 
-                    {status && <p className="text-sm font-medium animate-pulse">{status}</p>}
+                    <div className="pt-4 flex items-center justify-between">
+                        <div className="text-sm min-h-[20px]">
+                            {status === 'success' && <span className="text-green-600 font-medium">✨ Archive extracted successfully!</span>}
+                            {status === 'error' && <span className="text-red-600 font-medium">❌ Error extracting archive.</span>}
+                            {status !== 'idle' && status !== 'success' && status !== 'error' && <span className="text-gray-500">{status}</span>}
+                        </div>
+
+                        <button
+                            onClick={handleExtract}
+                            disabled={!file || isProcessing}
+                            className={`
+                                px-6 py-2 rounded-lg text-sm font-medium text-white transition-all
+                                ${!file || isProcessing ? 'bg-gray-200 text-gray-400' : 'bg-black hover:bg-gray-800 shadow-sm'}
+                            `}
+                        >
+                            {isProcessing ? 'Extracting...' : 'Extract Files'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

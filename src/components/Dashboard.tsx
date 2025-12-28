@@ -50,7 +50,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-4">
                     <button
                         onClick={toggleTheme}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="p-2 rounded-full transition-transform hover:scale-110 active:scale-95"
                         title="Toggle Dark Mode"
                     >
                         {darkMode ? <SunIcon className="h-6 w-6 text-yellow-400" /> : <MoonIcon className="h-6 w-6 text-gray-600" />}

@@ -20,6 +20,7 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
         },
+        autoHideMenuBar: true,
     });
 
     if (isDev) {
@@ -140,6 +141,24 @@ app.whenReady().then(() => {
             filters
         });
         return result.filePaths;
+    });
+
+    // List Files in Directory (Generic)
+    ipcMain.handle('system:listFiles', async (_, dirPath, extensions = []) => {
+        const fs = require('fs');
+        try {
+            const files = await fs.promises.readdir(dirPath);
+            return files
+                .filter((file: string) => {
+                    if (!extensions || extensions.length === 0) return true;
+                    const lower = file.toLowerCase();
+                    return extensions.some((ext: string) => lower.endsWith(ext.toLowerCase()));
+                })
+                .map((file: string) => path.join(dirPath, file));
+        } catch (error) {
+            console.error('Error listing directory:', error);
+            return [];
+        }
     });
 
     createWindow();

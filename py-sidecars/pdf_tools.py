@@ -93,7 +93,13 @@ def get_page_count(args):
 def compress_pdf(args):
     try:
         doc = fitz.open(args.input_path)
-        doc.save(args.output_path, garbage=4, deflate=True)
+        # Try to optimize
+        try:
+            doc.subset_fonts()
+        except Exception:
+            pass # Continue if subsetting fails
+            
+        doc.save(args.output_path, garbage=4, deflate=True, clean=True)
         print("SUCCESS")
     except Exception as e:
         print(f"ERROR: {str(e)}")

@@ -25,5 +25,6 @@ interface Window {
         selectDirectory: () => Promise<string | null>;
         saveFile: (defaultName: string, filters?: { name: string, extensions: string[] }[]) => Promise<string | null>;
         openFile: (filters?: { name: string, extensions: string[] }[], allowMulti?: boolean) => Promise<string[]>;
+        listFiles: (dirPath: string, extensions?: string[]) => Promise<string[]>;
     }
 }
